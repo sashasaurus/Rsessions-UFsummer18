@@ -1,0 +1,50 @@
+---
+title: "Looking at tidytext"
+output:
+  html_document:
+    df_print: paged
+date: '2018-07-18'
+---
+
+## load libraries 
+
+```{r}
+library(gutenbergr)
+library(tidyverse)
+library(tidytext)
+library(stringr)
+```
+
+## read in sherlock holmes stories from gutenberg library 
+
+```{r}
+sherlock_raw <- gutenberg_download(1661)
+```
+
+## clean text: remove title, create story levels 
+
+```{r}
+sherlock <- sherlock_raw %>% 
+  mutate(story = ifelse(str_detect(text, "ADVENTURE"), text, NA)) %>% 
+  fill(story) %>% 
+  filter(story != "THE ADVENTURES OF SHERLOCK HOLMES") %>% 
+  mutate(story = factor(story, levels = unique(story)))
+```
+
+## tidy the text: add line number column, split text into word tokens, remove stop words, remove holmes      
+
+```{r}
+tidy_sherlock <- sherlock %>% 
+  mutate(line = row_number()) %>% 
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% 
+  filter(word != "holmes")
+
+tidy_sherlock %>% 
+  count(word, sort = TRUE)
+```
+
+## tf-idf: term frequenxy inverse document frequency 
+
+
+
