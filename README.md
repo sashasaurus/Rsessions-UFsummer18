@@ -14,3 +14,4 @@ check out the etherpad for agenda and resources: https://public.etherpad-mozilla
 # Josh is trying again
 
 #This is a response to "Update ReadMe file" issue
+# Closing issues take 2
