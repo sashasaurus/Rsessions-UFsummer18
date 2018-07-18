@@ -7,8 +7,10 @@ check out the etherpad for agenda and resources: https://public.etherpad-mozilla
 <<<<<<< HEAD
 #hi
 =======
-
+  
 >>>>>>> 64cdf7d248a9764bcceca3a9dce1ee34569d3c0e
 
 
 # Josh is trying again
+
+#This is a response to "Update ReadMe file" issue
