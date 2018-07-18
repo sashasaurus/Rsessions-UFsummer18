@@ -17,11 +17,15 @@ library(stringr)
 
 ## read in sherlock holmes stories from gutenberg library 
 
+The gutenberg_download() uses the text ID number from the gutenberg library as its argument
+
 ```{r}
 sherlock_raw <- gutenberg_download(1661)
 ```
 
-## clean text: remove title, create story levels 
+## clean text
+
+create new column that starts with all caps ADVENTURE, these are the short stories then add the text data to column, remove the main title, make story column into factors 
 
 ```{r}
 sherlock <- sherlock_raw %>% 
@@ -29,10 +33,11 @@ sherlock <- sherlock_raw %>%
   fill(story) %>% 
   filter(story != "THE ADVENTURES OF SHERLOCK HOLMES") %>% 
   mutate(story = factor(story, levels = unique(story)))
+
+str(sherlock)
 ```
 
 ## tidy the text: add line number column, split text into word tokens, remove stop words, remove holmes      
-
 ```{r}
 tidy_sherlock <- sherlock %>% 
   mutate(line = row_number()) %>% 
@@ -44,7 +49,61 @@ tidy_sherlock %>%
   count(word, sort = TRUE)
 ```
 
-## tf-idf: term frequenxy inverse document frequency 
+## tf-idf: term frequency inverse document frequency 
 
+```{r}
+sherlock_tfidf <- tidy_sherlock %>% 
+  count(story, word, sort = TRUE) %>% 
+  bind_tf_idf(word, story, n) %>% 
+  arrange(-tf_idf) %>% 
+  group_by(story) %>% 
+  top_n(10) %>% 
+  ungroup() 
+
+sherlock_tfidf
+
+```
+## visualize the tf-idf 
+
+```{r}
+
+sherlock_tfidf %>% 
+  ggplot(aes(word, tf_idf, fill = story)) + 
+  geom_col(alpha = 0.8, show.legend = FALSE) + 
+  facet_wrap(~ story, scales = "free", ncol = 3) +
+  coord_flip() + 
+  theme(strip.text = element_text(size = 11)) + 
+  labs(x = NULL, y = "tf-idf", title = "tf-idf in Sherlock Holmes")
+```
+## sentiment in sherlock holmes 
+
+```{r}
+sentiment <- tidy_sherlock %>% 
+ # group_by(story)
+  right_join(get_sentiments("nrc")) %>%
+  filter(!is.na(sentiment)) %>% 
+  count(sentiment, sort = TRUE)
+sentiment
+```
+## plot the sentiment 
+
+```{r}
+sentiment_stories <- tidy_sherlock %>% 
+  group_by(story) %>% 
+  mutate(word_count = 1:n(), 
+         index = word_count %/% 500 + 1) %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  count(story, index = index, sentiment) %>% 
+  ungroup() %>% 
+  spread(sentiment, n, fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+sentiment_stories %>% 
+  ggplot(aes(index, sentiment, fill = story)) + 
+  geom_bar(alpha = 0.5, stat = "identity", show.legend = FALSE) + 
+  facet_wrap(~ story, ncol = 22, scales = "free_x")
+
+sentiment_stories
+```
 
 
