@@ -15,3 +15,4 @@ check out the etherpad for agenda and resources: https://public.etherpad-mozilla
 
 #This is a response to "Update ReadMe file" issue
 # Closing issues take 2
+# Closing issues take 3
