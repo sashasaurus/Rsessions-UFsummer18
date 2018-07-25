@@ -27,8 +27,6 @@ length(list.files(ZHfolder))
 
 ### Corpus object 
 
-Volatile because corpus destroyed if destroyed in R
-Can apply tm transformations to corpus, now tidytext handles this
 Creating a corpus object is a good gateway for creating other other objects such as a term-document matrix or tidy object based on your analysis needs 
 
 ```{r eval = FALSE}
@@ -39,9 +37,10 @@ SPcorpus <- VCorpus(DirSource(SPfolder))
 # access as you would any index 
 inspect(ZHcorpus[2])
 
-#view the full text 
+# view the full text 
 writeLines(as.character(ZHcorpus[2]))
 
+# quick cleanup
 clean <- tm_map(ZHcorpus, stripWhitespace)
 clean <- tm_map(ZHcorpus, content_transformer(tolower)
 clean <- tm_map(ZHcorpus, stemDocument)
@@ -100,14 +99,13 @@ tidy_corpus
 ```
 
 ### Frequencies 
-With a tidy corpus, we can apply tidyverse functions such as dplyr's count() that calls groupby before then ungroup after;tally & count are mutate & summarise; so count() says group-by then tally something 
+With a tidy corpus, we can apply tidyverse functions such as dplyr's count() that says group-by then tally something 
 
 ```{r}
 tidy_corpus %>% 
   count(word, sort = TRUE) 
 
 ```
-
 Remove stop words: stop_words contains data from three lexicons or we could create our own, anti_join looks for matches and identifies and retains whatever is NOT matched 
 
 ```{r}
@@ -188,7 +186,7 @@ freq <- lex_corpus %>%
 freq
 ```
 
-Nice visual for comparing word frequences from Silge & Robinson (might need library(scales)). Words that are close to the line have similar frequencies in both language texts so both folders use 'people'. Words that are far from the line are found more in one folder than another. Words above the line are common across the whole folder but not within that specific folder, and those below the line are common in that folder but not across all folders. So 'car' used in spanish but not used in chinese.  
+Nice visual for comparing word frequences from Silge & Robinson - Words that are close to the line have similar frequencies in both language texts so both folders use 'people'. Words that are far from the line are found more in one folder than another. Words above the line are common across the whole folder but not within that specific folder, and those below the line are common in that folder but not across all folders. So 'car' used in spanish but not used in chinese.  
 ```{r}
 ggplot(freq, aes(x = author_words, y = all_words, color = abs(all_words - author_words))) +
         geom_abline(color = "gray40", lty = 2) +
@@ -366,43 +364,6 @@ top_terms %>%
   coord_flip()
 
 ```
-
-
-
-  # extra stuff 
-  
-  See total words for each corpus 
-```{r eval=FALSE}
-
-total_words <- tf_words %>% 
-  group_by(author) %>% 
-  summarize(total = sum(n))
-total_words
-```
-  
-
-  
-  
-  R text workflow: 
-
-1. Load files into a VCorpus(DirSource(folder-to-text) list 
-2. using tm_map, strip stopwords, whitespace, punctuation, etc 
-3. convert the corpus object into a document-term-matrix 4. to do some summary stats 
-convert dtm to tidytext format to do more with tidy tools
-Problems: tm likes dtm, others like corpus, tidy stuff obviously tidy formats and it gets annoying casting one from another
-
-### data frame 
-Read the texts from a given directory; fileids and texts are columns
-Could use unnest() to parse each text into sentences 
-
-```{r eval = FALSE}
-df <- data_frame(file = dir(SPfolder, full.names = TRUE)) %>% 
-  mutate(text = map(file, read_lines)) %>% 
-  transmute(doc = basename(file), text)
-df
-
-```
-
 
 
 ## Resources 
