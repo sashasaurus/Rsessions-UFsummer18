@@ -1,0 +1,270 @@
+---
+title: "text analysis whirlwind"
+author: "Sasha Lavrentovich"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse) # following the tidy way of things
+library(tidytext) # package for text analysis 
+library(tm) # functions for text mining such as creating corpora
+library(textfeatures) # extracting text features for modelling
+library(topicmodels) # for making LDA models 
+```
+
+### Reading in Files 
+Create a path to the directory with the .txt files
+
+```{r}
+ZHfolder <- "YOUR PATH /Rsessions-UFsummer18/data/zh_small"
+SPfolder <- "YOUR PATH /Rsessions-UFsummer18/data/sp_small"
+
+# see how many files are in the ZH folder 
+length(list.files(ZHfolder))
+```
+
+### Corpus object 
+
+Creating a corpus object is a good gateway for creating other other objects such as a term-document matrix or tidy object based on your analysis needs 
+
+```{r eval = FALSE}
+# list of corpus 
+
+
+# access as you would any index 
+
+# view the full text 
+writeLines(as.character(ZHcorpus[2]))
+
+# some cleaning 
+clean <- tm_map(ZHcorpus, stripWhitespace)
+clean <- tm_map(ZHcorpus, content_transformer(tolower)
+clean <- tm_map(ZHcorpus, stemDocument)
+
+writeLines(as.character(clean[2]))
+
+# combine the two corpora 
+Vcorpus <- c(ZHcorpus, SPcorpus)
+inspect(Vcorpus)
+```
+
+
+### Tidy format with tidytext 
+
+tidy() creates a one row per document table 
+
+```{r eval = FALSE}
+
+
+```
+
+unnest_tokens() creates one token per row, stripped of punctuation, and in lower case 
+
+```{r eval = FALSE}
+
+```
+
+Exercise: create a new corpus called "tidy_corpus" that is tokenized by words; select to preserve the id, language, text, author columns only in the new tidy_corpus 
+
+```{r eval = FALSE}
+tidy_corpus <- corpus %>%
+
+```
+
+### Frequencies 
+
+With a tidy corpus, we can apply tidyverse functions such as dplyr's count() 
+
+```{r}
+
+
+```
+
+Remove stop words: stop_words contains data from three lexicons or we could create our own, anti_join looks for matches and identifies and retains whatever is NOT matched 
+
+```{r}
+
+```
+Exercise: perform a frequency count of the words without stop words but grouped by author 
+
+```{r}
+ 
+
+```
+
+## Visualize frequency 
+
+See the top 15 words across the whole corpus 
+
+```{r}
+
+```
+
+Exercise: visualize the top 10 most frequent words by spanish and chinese authors 
+Hint: use top_n(), group_by(), ungroup(), fill argument, facet_wrap()
+
+```{r}
+
+```
+
+### Term frequency 
+
+See percent of word use across all the docs: term frequency  
+
+```{r}
+
+```
+
+Percent word use in each author folder 
+
+```{r}
+
+```
+
+Nice visual for comparing word frequences from Silge & Robinson (might need library(scales)). 
+
+```{r eval = FALSE}
+ggplot(freq, aes(x = author_words, y = all_words, color = abs(all_words - author_words))) +
+        geom_abline(color = "gray40", lty = 2) +
+        geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+        geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+        scale_x_log10(labels = scales::percent_format()) +
+        scale_y_log10(labels = scales::percent_format()) +
+        scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+        facet_wrap(~ author) +
+        theme(legend.position="none")
+```
+
+How correlated are word frequencies between the authors and the texts? They are all pretty similar... 
+
+```{r}
+
+```
+
+### term frequency * inverse document frequency (TF-IDF)
+
+TF-IDF measures the word's frequency adjusted to how rarely it used across docs to see how uniquely important it is for one document within a corpus, see [link](https://www.tidytextmining.com/tfidf.html) by Julia Silge & David Robinson 
+
+
+```{r eval = FALSE}
+
+tf_words <- tidy_corpus %>% 
+  count(author, word, sort = TRUE) %>% 
+  ungroup()
+
+
+
+tf_idf
+```
+
+Take a look 
+
+```{r eval = FALSE}
+tf_idf %>% 
+  group_by(author) %>% 
+  top_n(10, tf_idf) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, tf_idf)) %>% 
+  ggplot(aes(word, tf_idf, fill = author)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(x = NULL, y = "tf-idf") + 
+  facet_wrap(~author, ncol = 2, scales = "free") + 
+  coord_flip()
+```
+
+## Sentiment Analysis 
+
+Three lexicons that classify feelings:
+AFINN: scored -5, 5 
+bing: positive vs negative
+nrc: yes or no in pos, neg, angry, anticipate, disgust, fear, joy, sad, surpr, trust
+
+```{r}
+#get_sentiments("nrc")
+
+
+```
+
+
+```{r eval = FALSE}
+sentiments %>% 
+  count(sentiment, word) %>% 
+  filter(n >= 10) %>% 
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+```
+
+Exercise: visualize by author folder
+```{r eval= FALSE}
+
+```
+
+
+### Tagging 
+
+For today, we will make do with a builtin POS dataset. Opetimally, we want to use packages (openNLP, cleanNLP) that are more robust/trained on sentences, but these require python or java backends, spacy or coreNLP so we'll have to settle with more simple tagging. Get these packages though for future work. 
+
+```{r}
+
+```
+
+
+### Document Term Matrix 
+
+Used for modelling, in a dtm each row is one document, each column is a term, each value is the number of appearances of that term in that document. Terms are usually words, but could be other. 
+
+
+```{r}
+# create dtm and do some basic cleaning 
+
+
+# view terms 
+
+
+# find terms that occur at least five tiems
+
+# find terms that correlate for the term 'people' at at least 0.8
+
+```
+
+
+## Topic modelling 
+
+What terms are associated with what topic, and what documents are likely to use these topics? Useful to discover main topics of documents for things such as classifying emails, authors, etc 
+
+```{r}
+# train model
+
+
+# see top ten terms 
+
+# per topc per word probabilities
+
+
+
+# find the ten terms most common within each topic 
+
+top_terms <- topics %>%
+  group_by(topic) %>% 
+  top_n(10, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
+top_terms
+
+# visualize these terms
+
+```
+
+
+## Resources 
+
+List of R NLP packages/resources in R: [link](https://www.r-pkg.org/ctv/NaturalLanguageProcessing)
+
+Tidytext book by Julia Silge and David Robinson: [link] (https://www.tidytextmining.com/)
