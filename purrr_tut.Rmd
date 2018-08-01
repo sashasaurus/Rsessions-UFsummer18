@@ -1,0 +1,306 @@
+---
+title: "Intro to purrr: variety of use cases"
+author: "Sasha Lavrentovich"
+date: "August 1, 2018"
+output: html_notebook
+---
+Today's topic is iteration: or "for each 'whatever' do 'this'" which we already do by copy/pasting, for loops, maybe lapply, and today we'll talk about the tidyverse way which is using the purrr package's map functions. This notebook has a variety of use cases based from tutorials by Jenny Bryan (https://jennybc.github.io/purrr-tutorial/index.html)
+
+### Packages 
+Load packages; if the progress bar turns red then install.packages("name")
+```{r}
+suppressMessages(library(tidyverse))
+library(repurrrsive) # package for purrr sample datasets
+library(glue) #package for pasting together strings 
+library(gapminder) # dataset with lifeExp, gdpPercap, pop, etc
+library(devtools) # package for developing packages 
+```
+
+NB: we can directly install packages from github (since the packages might not be on cran) or personal links for when individuals put together their own datasets/scripts
+
+```{r}
+#devtools::install_github("brooke-watson/BRRR")
+library(BRRR) # package with sounds 
+
+```
+
+
+
+### Intro: creating your own function 
+
+We are music producers; we want to loop through 5 different sounds and add a 0.75 of a second pause in between each sound. BRRR is our sound library, check it out below. We can index sounds with an artist name or number index. 
+
+```{r}
+?skrrrahh
+skrrrahh(5) 
+skrrrahh("nicki")
+skrrrahh("snoop")
+```
+
+How would you do the sound + pause iteration? Take a moment to think, discuss, and maybe implement. Hint: Sys.sleep(0.75) would be a command to implement the 0.75 pause 
+
+
+Method 1: 
+```{r}
+
+```
+
+Method 2: 
+
+```{r}
+ 
+```
+
+Method 3: 
+
+```{r}
+
+
+```
+
+To get rid of the output, we can use a map() friend called walk() that instead of returning a list, walk() returns the input .x so we use walk() when we are not interested in changing our data 
+
+```{r}
+
+walk(1:5, ~ {Sys.sleep(0.75); skrrrahh(.x)})
+
+```
+
+Some advantages of using map() functions:   
+  1.    emphasis on the actions rather than the objects so easier to see what is being done   
+  2.  reduces repeats such as variable names so code intention is expressed more clearly and is more self-contained   
+  3.  type stability: a function always returns the same as-advertised data type structure so you get organized formats 
+
+### map() and map_*() functions: map(.x, .f, ...)
+
+- .x = what to iterate over 
+- .f = what to do
+- ... = optional stuff that gets passed from map() to .f
+
+map() always returns a list   
+map_*[desired outcome] returns whatever you specify (eg. map_chr returns a character vector)
+
+Bite-sized example with finding a mean of two lists 
+
+- Create a list with a list 'a' that contains vector 1 through 10, and a list 'b' that contains 10 through 100 
+- Iterate over the list to find the mean of each, using the pre-built function mean()
+- Redo, but this time, return a vector of doubles
+
+```{r eval=FALSE}
+ # create two lists in one 
+l <- 
+# input, function mean
+map()
+ # input, ~ function operator, .x as placeholder 
+map()
+ # map_[desired outcome], input, ~ function operator, .
+map_dbl()
+
+```
+
+### Extended example from JB: exploring game of thrones list
+
+Get to know your list: valuable since we can end up dealing with lots of lists - especially since a data frame could be one, and summary statistics could be another
+
+```{r}
+?got_chars
+
+View(got_chars)
+
+# indexing with a list 
+str(got_chars[[9]])
+
+got_chars[[9]][["name"]]
+
+```
+
+How you can map:   
+map(your input, your function)   
+map(input, string)   
+map(input, integer)   
+
+```{r}
+map(got_chars, "name") # output the list labelled with name
+map(got_chars, 3) # output the third index of the list within each got_char list 
+
+# type of culture? 
+map_chr(got_chars, ~ .x[["culture"]])
+
+# is character alive? spoiler alert? 
+map_lgl(got_chars, ~ .x[["alive"]])
+
+# how many allegiances? 
+map_int(got_chars, ~ length(.x[["allegiances"]]))
+
+```
+
+Can extract multiple things into data frame rows
+```{r}
+got_chars[[3]][c("name", "culture", "born")]
+```
+
+Extract by integer position rather than name/index by using backticks: `[` 
+```{r}
+x <- map(got_chars, `[`, c("name", "culture", "born"))
+x
+```
+
+Power of purrr seen by applying functions across nested layers of a list. For example, lets see who all the Lannisters are  
+
+```{r}
+got_chars %>%
+  set_names(map_chr(.,'name')) %>%
+  map(`[`,c('name','allegiances')) %>%
+  keep(~str_detect(.$name, 'Lannister'))
+```
+
+
+### Developing a map workflow
+1. Start with a small example 
+
+```{r}
+glue_data(
+  list(name = "Sasha", born = "in Kiev"), 
+  "{name} was born {born}."
+)
+```
+2. Practice with a real example from your data (a couple of times)
+
+```{r}
+glue_data(got_chars[[2]], "{name} was born {born}.")
+```
+3. Put this code into map()
+
+```{r}
+map(got_chars, ~ glue_data(.x, "{name} was born {born}"))
+```
+
+4. Remember that map() returns a list, but we want a string, so by type specific 
+
+```{r}
+map_chr(got_chars, ~ glue_data(.x, "{name} was born {born}"))
+
+```
+
+### Lists and data frames 
+
+We can shuffle between lists and dataframes which can be very helpful for extracting necessary data and analyzing it 
+
+```{r}
+# createa a tibble by extracting lists of names and allegiances
+gt_df <- tibble(
+  name = map_chr(got_chars, "name"), 
+  houses = map(got_chars, "allegiances")
+)
+
+View(gt_df)
+
+# create a new column for number of houses that a particular character is addiliated with
+gt_df %>% 
+  mutate(n_houses = map_int(houses, length)) %>% 
+  filter(n_houses > 1) 
+
+```
+
+map() seems to work particularly well with tidyr::unnest makes unnest() can make each element of the list its own row. So to see which houses in particular each name is affiliated with, then we need to add unnest() as the last function in the pipe sequence  
+```{r}
+
+# see each list element as its own row 
+gt_df %>% 
+  mutate(n_houses = map_int(houses, length)) %>% 
+  filter(n_houses > 1) %>% 
+  unnest()
+
+
+# can undo the df
+deframe(gt_df)
+# and undo the undo
+enframe(deframe(gt_df))
+```
+
+
+### Use case with model comparisons in gapminder
+We have 5 models to compare life expectancy 
+
+Could do this copy/paste style 
+```{r}
+f1 <- lifeExp ~ pop
+f2 <- lifeExp ~ gdpPercap 
+f3 <- lifeExp ~ pop + gdpPercap 
+f4 <- lifeExp ~ pop + gdpPercap + year 
+f5 <- lifeExp ~ pop + gdpPercap + year + continent 
+```
+
+```{r}
+m1 <- lm(f1, gapminder)
+m2 <- lm(f2, gapminder)
+m3 <- lm(f3, gapminder)
+m4 <- lm(f4, gapminder)
+m5 <- lm(f5, gapminder)
+```
+
+Gets tediuous, with lots of saved variables 
+```{r}
+summary(m1)
+AIC(m1)
+```
+
+Purrr can enable this process by making a list of the five formulas. Lists lets us populate with different types 
+
+
+```{r}
+models <- list(
+  simple = 'lifeExp ~ pop + gdpPercap', 
+  medium = 'lifeExp ~ pop + gdpPercap + continent + year', 
+  more = 'lifeExp ~ pop + gdpPercap + country + year', 
+  woah = 'lifeExp ~ pop + gdpPercap + year*country')
+
+# make model and their names into a data frame
+model_frame <- data_frame(model = models) %>% 
+  mutate(model_name = names(model))
+
+# convert models into formulas 
+model_frame <- model_frame %>% 
+  mutate(model = map(model, as.formula))
+
+# apply linear model to the data 
+model_frame <- model_frame %>%  
+  mutate(fit = map(model, ~lm(., gapminder)))
+
+```
+
+
+We can also efficiently use broom here and look at the list output in tidier/dataframe versions. Broom functions must take models in as inputs, which we now neatly have as lists in our model_frame 
+
+```{r}
+# tidy() transforms to a tibble
+broom::tidy(model_frame$fit[[1]])
+
+# glance() creates per model stats such as AIC or R^2 
+broom::glance(model_frame$fit[[1]])
+
+# augment() adds the result of the fit to the original data frame - can't seem to work 
+model_frame_br <- model_frame %>% 
+  broom::augment(model_frame$fit[[1]])
+
+```
+
+Using purrr and broom can help us analyze our different models..(need to include broom::glance here)
+```{r eval = FALSE}
+model_frame <- model_frame %>% 
+  mutate(aic = map_dbl(fit, ~ AIC(.))) %>% 
+  arrange(aic)
+
+```
+
+
+
+## Resources 
+
+Treasure chest of purrr tutorials: [link] (https://jennybc.github.io/purrr-tutorial/index.html)
+
+Purrrr cheatsheet: [link] (https://evoldyn.gitlab.io/evomics-2018/ref-sheets/R_purrr.pdf)
+
+R for data science has a few chapters on purrr: [link] (http://r4ds.had.co.nz/iteration.html#the-map-functions)
+
+
