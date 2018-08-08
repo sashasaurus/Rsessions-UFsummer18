@@ -1,0 +1,213 @@
+---
+title: "purrring around with gapminder"
+author: Sasha Lavrentovich 
+output: html_notebook
+---
+
+
+```{r}
+suppressMessages(library(tidyverse))
+library(gapminder)
+```
+
+
+## Reacquaintance with gapminder 
+
+We'll be looking at the relationship of life expectancy in 130-some countries on year (1950 through 2010). Here's a brute visual of that.  
+
+```{r}
+ggplot(gapminder, aes(x = year, y = lifeExp)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm")
+```
+
+We'll want to see if there is a linear relationship between life expectancy and year within each country so we'll want to fit one model to each country. Then we'll compare fits with comparing r-squared values and looking at residuals. 
+
+## Fitting one model to many data frames 
+
+### Data frames in data frames with tidyr::nest() 
+First we'll create a nested dataframe where each country is a row and all the data about that country (lifeExp, pop, gdpPer) is put into a list with the nest() function. This will allow us keep models and data in correspondence with each other during oeprations. 
+
+```{r}
+# created new df grouped by country/continent and everything else nested 
+
+
+# see one country, where you select the row and comma for all of the columns; see structure of new df 
+
+
+# index into the dataframe's data column, and extract first element there, which turns out to be the data associated with Afghanistan 
+
+```
+
+### Create & apply a function with purrr::map()
+We want to fit a model to each country in the dataframe. To do so, we'll create a function for a linear model fit for life expectancy and year, that we will then call for each country 
+
+```{r}
+
+# create a function for lm 
+
+
+# fit one model 
+
+
+# using dplyr::mutate and purrr:map, create a new column with the lm fit on each country's data row 
+# fit one model on each country of the nested data frame
+
+
+# each country has its own associated model now; use index to look at a specific country 
+
+
+# use index to look into a specific country 
+
+
+```
+
+### Compute & collect model info with broom::tidy(), glance(), augment()
+The following broom verbs can help with model information and diagnostics:  
+1. tidy(): summarize the stats; returns tibble with model coefficients and stats  
+2. glance(): see the stats; returns one-row of model summary  
+3. augment(): add stats; returns tibble corresponding with original df, of observation-level stats 
+Use broom to compute r squared values and collect residuals
+
+
+```{r}
+# model diagnostics as a one-line df
+
+# model output as a tibble 
+
+# model output related to original data points 
+
+```
+
+### Extract one statistic 
+To measure linearity, we can compare r-squared values where if rsq is closer to 1 then the variance in life expectancy can be explained by year. We'll use glance() to see the r squared value for each country, and create a new column for that statistic. We'll also add the model outputs to our original data frame 
+
+```{r}
+
+# create new df with glance column, use that glance column to pull our the r.squared using map_dbl
+# also add new tidy and augment columns for later work 
+
+
+# see which countries have highest rsq; 
+
+
+# you can see this plotted but its a lil overwhelming 
+models_br %>% 
+  ggplot(aes(rsq, reorder(country, rsq))) + 
+  geom_point(aes(color = continent))
+
+```
+
+### Take out a df from your df with tidyr::unnest()
+Say we want to collect the residuals and plot those out to see the quality of fit. Right now the residuals live within a dataframe within the dataframe, so to explore or perform operations on the model outputs, we can snap the lists back into data frames with unnest() 
+
+```{r}
+
+# unnest to original df; arguments: data, the column to unnest, .drop = true if you want to drop the other columns 
+
+# unnest glance and drop the other columns 
+
+# get residuals: unnest the augment summary, and plot the year and residuals by country, and facetted by continent 
+
+```
+
+### Other piping combinations  
+
+```{r}
+
+# can see which countries had non-linear progress by piping model outputs into other dplyr verbs 
+
+models_br %>% 
+  unnest(glance) %>% 
+  filter(r.squared < 0.25)
+
+# can also unnest by patterns such as string detections
+
+models_br %>% 
+  filter(str_detect(country, pattern = "Korea")) %>% 
+  unnest(data)
+
+# then plot it 
+
+models_br %>% 
+  filter(str_detect(country, pattern = "Korea")) %>% 
+  unnest(data) %>% 
+  ggplot() + 
+    geom_line(aes(year, lifeExp, color = country))
+
+```
+
+
+## Now the opposite: fit many models to one data frame 
+
+Here, we'll fit a couple different multiple linear regressions to all of the gapminder data (eh). We'll then extract the r-squared and AIC to compare the models. 
+```{r}
+# create a list of the different model combinations 
+model_list <- list(
+  simple = 'lifeExp ~ pop + gdpPercap', 
+  medium = 'lifeExp ~ pop + gdpPercap + continent + year', 
+  more = 'lifeExp ~ pop + gdpPercap + country + year', 
+  woah = 'lifeExp ~ pop + gdpPercap + year*country')
+
+# make model and their names into a data frame
+
+model_frame <- data_frame(model = model_list) %>% 
+  mutate(model_name = names(model))
+
+# convert models into formulas 
+model_frame <- model_frame %>% 
+  mutate(model = map(model, as.formula))
+
+# apply set of models to the data using map and pre-built lm function 
+
+
+
+# check out the fit for one model 
+
+```
+
+### Diagnosing the regression
+
+Since we have multiple regressions, we need to get the adjusted r-squared value since it accounts for the number of predictors we added (to avoid overfitting)
+
+
+```{r}
+# create a function that extracts the adj.r.squared value from a glance 
+
+
+# add a rsq column that extracts the r.squared values for each model name 
+# add an aic column that computes with the built-in AIC() function then arrange by AIC 
+
+
+# next steps we could compare which predictor is more valuable than another with step wise comparison.. or cross-validate on fake data 
+
+```
+
+### Misc stuff 
+
+```{r}
+
+# find and convert factors: gapminder 'country' and 'continent' are factors but probably should be characters 
+
+str(gapminder)
+
+gapminder %>% 
+  map_lgl(is.factor) # cycle through columns and identify if factor or not 
+
+gapminder %>%  
+  map_if(is.factor, as.character) %>% # if factor, then map as char 
+  str()
+
+# need to covnert back to data frame... 
+
+```
+
+
+## References 
+
+Charlotte Wickham's tidyverse tutorial: https://github.com/rstudio/master-the-tidyverse 
+
+
+
+
+
