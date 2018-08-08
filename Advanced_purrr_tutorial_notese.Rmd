@@ -1,0 +1,206 @@
+---
+title: "Purrr and Broom Tutorial"
+output: html_notebook
+date: "August 8, 2018"
+author: "Jorge Valdés Kroff"
+---
+
+This tutorial is built off of Chapter 20 from *R for Data Science* by Wickham & Grolemund.  
+First, we will load in our libraries. We'll be using a new one called `modelr` which may require you to install first.
+
+```{r Libraries}
+library(tidyverse)
+#install.packages("modelr") #If you need to install, use this code, remove the initial comment 
+library(modelr)
+library(gapminder)
+library(broom)
+```
+
+Following the chapter, we'll build several simple models using the **gapminder** dataset. 
+
+>Side Note: this dataset was made popular by Hans Roseling, Swedish doctor and statistician. His TED talk was one of the most inspiring for data science that I can recall back when I was a grad student. Check it out here: https://www.ted.com/talks/hans_rosling_shows_the_best_stats_you_ve_ever_seen
+
+The **gapminder** dataset summarizes the progression of countries over time, considering life expectancy, GDP. 
+
+```{r Gapminder}
+gapminder
+```
+
+Let's take a look on how life expectancy (`lifeExp`) changes over time (`year`) for each country (`country`).
+
+```{r lifeExp visualization}
+gapminder %>% 
+  ggplot(aes(year, lifeExp, group = country)) +
+  geom_line(alpha = 1/3)
+```
+
+What do you see?
+
+We could fit a linear model to a single country and determine whether the linear model has a *positive* slope and whether a linear function is a good fit. 
+
+```{r New Zealand}
+nz <- filter(gapminder, country == "New Zealand")
+nz %>% ggplot(aes(year, lifeExp)) +
+  geom_line() +
+  labs(main = "Raw data")
+
+nz_mod <- lm(lifeExp ~ year, data = nz)
+nz %>% 
+  add_predictions(nz_mod) %>% 
+  ggplot(aes(year, pred)) + 
+  geom_line() +
+  labs(title = "Linear model")
+
+nz %>% 
+  add_residuals(nz_mod) %>% 
+  ggplot(aes(year, resid)) +
+  geom_hline(yintercept = 0, color = "red", size = 3) +
+  geom_line() +
+  labs(title = "Residuals")
+
+```
+
+How would we do this for each country?
+
+We can use the `nest` and `map` functions from `purrr`. We've already seen `map()` which works well when you want to repeat an action for each variable, but now we want to apply that same logic to subsets of rows (i.e., country) within a data frame. 
+
+```{r 1st nest}
+by_country <- gapminder %>% 
+  group_by(country, continent) %>% # to make sorting easier
+  nest()
+by_country
+```
+
+Now we have a data frame with one row per grouping (country). Notice that we now have a new column structure type called a **list-column**. This is a feature exclusive to *tibbles*. This cannot be done with base R's `data.frame` structure.
+
+To take a look at any specific country's data set, you could use list indexing.
+
+```{r Afghanistan}
+by_country$data[[1]]
+```
+
+Now, it should be fairly easy to iterate linear models per country, because we essentially have a lot of mini data frames within a larger one (that's the nested structure part). 
+
+First, we can create a function to fit a linear model.
+
+```{r Linear Model function}
+country_model <- function(df) {
+  lm(lifeExp ~ year, data = df)
+}
+```
+
+Another powerful feature of **tibbles** is that we can now store the results of these models as their own list-column! So we will combine the `map` function to iterate our linear model function and combine it with the `mutate` function to add the results to our tibble. 
+
+```{r Linear results}
+by_country <- by_country %>% 
+  mutate(model = map(data, country_model))
+by_country
+
+#just to show that we could have done this without a custom function
+by_country2 <- by_country %>% 
+  mutate(model = map(data, ~lm(lifeExp ~ year, data = .)))
+by_country2
+summary(by_country$model[[1]])
+summary(by_country2$model[[1]])
+```
+
+This is extremely helpful as everything stays together (useful for data exploration).
+
+Now we can iterate the function to extract residuals following a similar procedure. 
+
+```{r Residuals}
+by_country <- by_country %>% 
+  mutate(resids = map2(data, model, add_residuals))
+by_country
+```
+
+However, now that we have a nested data frame, we can't easily plot the residuals (we could do so for each individual country). In order to get items back into a flat, rectangular data frame, we can use `unnest`.
+
+```{r Unnest Residuals}
+resids <- unnest(by_country, resids)
+head(resids)
+tail(resids)
+```
+
+Now it will be easy to plot the residuals again.
+
+```{r Residuals plot}
+resids %>% 
+  ggplot(aes(year, resid)) +
+  geom_line(aes(group = country), alpha = 1/3) +
+  geom_smooth(se = FALSE)
+```
+
+Let's facet by continent to check out some interesting trends.
+
+```{r Residuals by continent}
+resids %>% 
+  ggplot(aes(year, resid, group = country)) +
+  geom_line(alpha = 1/3) +
+  facet_wrap(~continent)
+```
+
+We can also add useful model metrics to our dataset. Witha simple linear model, we might want to see $R^2$, *p*-values, etc.
+
+```{r Glance}
+glance(nz_mod)
+```
+
+`glance` is from the `broom` package which allows us to keep tidy data. Let's apply `glance` to our nested data frame and then  `unnest` it. 
+
+```{r Glance and Unnest}
+by_country %>% 
+  mutate(glance = map(model, glance)) %>% 
+  unnest(glance)
+  
+```
+
+You see, however, that the unused list-columns still appear. We can suppress these columns using `.drop = TRUE`.
+
+```{r Dropped}
+glance <- by_country %>% 
+  mutate(glance = map(model, glance)) %>% 
+  unnest(glance, .drop = TRUE)
+glance
+```
+
+Now we can do something as simple as sort the data by $R^2$ to figure out which country data sets are not fitting well.
+
+```{r Arrange R-squared}
+glance %>% 
+  arrange(r.squared)
+```
+
+Worst models appear to be in Africa. We can also confirm this visually.
+
+```{r Visualize R-squared}
+glance %>% 
+  ggplot(aes(continent, r.squared)) +
+  geom_jitter(width = 0.5)
+```
+
+Let's take a look at the particluarly bad fits.
+
+```{r Bad fit}
+bad_fit <- filter(glance, r.squared < 0.25)
+
+gapminder %>% 
+  semi_join(bad_fit, by = "country") %>% #keeps the entire dataset per country specified in bad_fit
+  ggplot(aes(year, lifeExp, color = country)) +
+  geom_line()
+```
+
+Let's take a look at some other useful functions from `broom`. We already saw `glance` which returns a row for each model. Each column thus gives a model summary. `tidy` allows us to return a row for each coefficient in a model. `augment` returns a row for each row in the data frame. this will add extra values like residuals and influence statistics. 
+
+```{r Broom functions}
+tidy <- by_country %>% 
+   mutate(tidy = map(model, tidy)) %>% 
+   unnest(tidy, .drop = TRUE)
+tidy
+
+augment <- by_country %>% 
+  mutate(augment = map(model, augment)) %>% 
+  unnest(augment, .drop = TRUE)
+augment
+```
+
