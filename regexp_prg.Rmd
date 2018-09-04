@@ -1,0 +1,128 @@
+---
+title: "Regular Expressions for PRG"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(tidytext)
+```
+
+Regular expressions are patterns that describe a set of strings so that we can use them for string operations. Regexps are useful to check if a text contains a certain string pattern, to find those matches, then make modifications, remove, or pull information out of the text. Regexps are common across all programming languages and work in most text editors.
+
+We can think of regexps are a set of instructions where you say, "find this pattern, then this pattern, then this.." You input the regexp pattern and the output will be the pattern matches. 
+
+
+### Use case: explore and clean up file names
+Say you have a list of files and you want to remove the full directory names; create a regexp that deletes everything up until the final slash: 
+
+```{r}
+filenames <- c("/home/sasha/NLI_toefl11/ETS_by_prof/toefl11_med/test/DEU/1112.txt", "/home/sasha/NLI_toefl11/ETS_by_prof/toefl11_med/test/DEU/1324.csv", "/home/sasha/NLI_toefl11/ETS_by_prof/toefl11_med/test/DEU/1982.txt")
+
+# need to escape backslashes
+str_replace(filenames, ".*/", "")
+
+# as always, there's a function name for that too 
+basename(filenames)
+
+# extract all the file name extensions
+str_extract(filenames, "[a-zA-Z]*$")
+
+# exercise: extract the relative path of only the csv file 
+str_subset(filenames, "[a-zA-Z]*\\.csv$")
+
+
+```
+
+Some metacharactors
+^: matches the start of the string
+$: matches the end of the string 
+\b: matches edge of a word 
+
+Some operators 
+. matches any single character 
+[...] matches a character list 
+[^...] matches everything that is not in character list; the inverse of the latter 
+\ escape the special meaning of a metacharacter; so \\ would be a literal backslash 
+| or operator 
+(...) grouping 
+\\N back reference to grouping where N indicates the number of groupings used aka backreference
+? optionals 
+{} specify the number of repetitions
+
+Some character classes 
+\D, [:digit], [^0-9] are all non-digits 
+[a-z], [:lower:] are lower case 
+\w [[:alnum:]_]  word characters
+\s space
+\S not space 
+[^A-Z0-9] not a uppercase or number
+\s or [\r\t\n] any whitespace character: space, tab, newline, respectively
+\S or [^\s] not whitespace 
+
+
+### Use case: clean up html tags 
+
+```{r}
+# extract html tags 
+
+string <- "<text>Snowy Yerevan - Armenia<br/> Armenia is beautiful. In winter<correct>,</correct></tag></change> <change><selection></selection><tag><correct>it </correct></tag></change>is very cold and <change><selection>very snow</selection><tag><symbol>y</symbol><correct> it snows</correct></tag></change>. I like winter because I wear big coats, hats and gloves <change><selection>for</selection><tag><correct> to</correct></tag></change> go out in the downtown because <change><selection>the</selection><tag><correct></correct></tag></change><change><selection> peoples</selection><tag></tag></change> always walk along the North Avenue.</text>"
+
+string
+
+# remove all opening/closing html tags; match repeating words and replace with one instance
+str_replace_all(tolower(string), "<[^>]*>", "") %>%
+  str_replace("\\b(\\w+)\\s+(\\1\\s*)+\\b", "\\1 ") 
+```
+
+
+```{r}
+text <- "This is the text where we find the determiner 'the' in the text then we search for another instance."
+
+str_subset(text, "[tT]he")
+
+grep("[^a-zA-Z][tT]he[^a-zA-Z]")
+
+grep("(^|[^a-zA-Z])[tT]he[^a-zA-Z]")
+
+```
+
+Remove anything that is not a character
+```{r}
+wiki <- "Title The title, taken from the well-known slogan for Wheaties breakfast cereal, crops up in a key scene late in the novel when a waitress, apparently ironically, says Breakfast of Champions each time she serves a customer a martini. Vonnegut, in his typical ironic manner, mocks the legal and copyright systems as he notes meticulously that Breakfast of Champions is a registered trademark of General Mills, Inc. for its breakfast cereal products, and that his use of the term is not intended to disparage their fine products."
+
+?toLower()
+# lower case all text
+wiki <- base::tolower(wiki)
+
+# remove anything that is not a a character
+wiki <- gsub("[^A-Za-z ]", "", wiki)
+
+wiki
+```
+
+```{r}
+library(RDRPOSTagger)
+tagger <- rdr_model(language = "English", annotation = "POS")
+rdr_pos(tagger, wiki)
+
+```
+
+
+```{r}
+verbs <- "devoured|ate|snacked"
+nouns <- "famil(y|ies)"
+
+```
+
+
+```{r}
+ahs <- c("aaaah", "aah")
+str_detect("4{a}", ahs)
+
+```
+
+What does \$[0-9]+(\.[0-9][0-9]) signify? 
+Exercise: find all instances of a year in the text
+Ans: [0-9][0-9][0-9][0-9] or maybe [0-9]{4}
